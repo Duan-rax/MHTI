@@ -144,6 +144,10 @@ class ApiTokenStatus(BaseModel):
     is_valid: bool | None = None
     last_verified: datetime | None = None
     error_message: str | None = None
+    # R18（成人内容）探测：True 已开启 / False 未开启 / None 无法判定（见 TMDBService.check_adult_access）
+    adult_enabled: bool | None = None
+    adult_message: str | None = None
+    adult_checked_at: datetime | None = None
 
 
 class ApiTokenSaveRequest(BaseModel):

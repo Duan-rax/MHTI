@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
-from server.core.auth import AuthContext, require_auth
+from server.api.deps import AuthContext, require_auth
 from server.main import app
 
 
@@ -96,7 +96,7 @@ def temp_dir() -> Generator[Path, None, None]:
 @pytest.fixture
 def file_service():
     """Provide a FileService instance for testing."""
-    from server.services.file_service import FileService
+    from server.domain.media.file_service import FileService
 
     return FileService()
 
@@ -112,7 +112,7 @@ def config_service(temp_db: Path):
     Returns:
         ConfigService instance with isolated database.
     """
-    from server.services.config_service import ConfigService
+    from server.domain.system.config_service import ConfigService
 
     return ConfigService(db_path=temp_db)
 

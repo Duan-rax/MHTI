@@ -4,8 +4,8 @@ import App from './App.vue'
 import router from './router'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
-import './style.css'
-import './styles/ios-theme.css'
+import './shared/styles/design-tokens.css'
+import './shared/styles/global.css'
 
 const app = createApp(App)
 const pinia = createPinia()

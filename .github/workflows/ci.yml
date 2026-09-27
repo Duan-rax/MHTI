@@ -78,7 +78,7 @@ jobs:
 
       - name: 类型检查
         working-directory: web
-        run: npm run build:check || npm run build
+        run: npm run build:check
 
       - name: 构建产物检查
         working-directory: web

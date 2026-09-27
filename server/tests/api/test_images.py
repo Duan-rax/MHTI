@@ -11,7 +11,7 @@ from server.models.image import ImageDownloadResult, BatchDownloadResponse
 
 
 @pytest.fixture
-def client():
+def client(override_auth):
     """Provide a test client."""
     return TestClient(app)
 
@@ -35,7 +35,7 @@ class TestImagesAPI:
         )
 
         with patch(
-            "server.services.image_service.ImageService.download_image",
+            "server.domain.artifacts.image_service.ImageService.download_image",
             new_callable=AsyncMock,
         ) as mock_download:
             mock_download.return_value = mock_result
@@ -63,7 +63,7 @@ class TestImagesAPI:
         )
 
         with patch(
-            "server.services.image_service.ImageService.download_image",
+            "server.domain.artifacts.image_service.ImageService.download_image",
             new_callable=AsyncMock,
         ) as mock_download:
             mock_download.return_value = mock_result
@@ -103,7 +103,7 @@ class TestImagesAPI:
         )
 
         with patch(
-            "server.services.image_service.ImageService.download_batch",
+            "server.domain.artifacts.image_service.ImageService.download_batch",
             new_callable=AsyncMock,
         ) as mock_download:
             mock_download.return_value = mock_response
@@ -143,7 +143,7 @@ class TestImagesAPI:
         )
 
         with patch(
-            "server.services.image_service.ImageService.download_batch",
+            "server.domain.artifacts.image_service.ImageService.download_batch",
             new_callable=AsyncMock,
         ) as mock_download:
             mock_download.return_value = mock_response
@@ -182,7 +182,7 @@ class TestImagesAPI:
         )
 
         with patch(
-            "server.services.image_service.ImageService.download_batch",
+            "server.domain.artifacts.image_service.ImageService.download_batch",
             new_callable=AsyncMock,
         ) as mock_download:
             mock_download.return_value = mock_response

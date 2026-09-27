@@ -1,0 +1,257 @@
+/* ==========================================================================
+ * MHTI 设计令牌 — Soft Minimalism / Clean UI
+ *
+ * 设计原则（每处样式都应能回答"为什么这样"）：
+ *   1. 克制  — 一个品牌色 + 语义色；无渐变、无发光、无毛玻璃
+ *   2. 层次  — 靠留白、字号、字重分区，边框与阴影只做辅助
+ *   3. 一致  — 尺寸走 4px 网格，圆角与阴影各有固定档位，不即兴取值
+ *   4. 功能优先 — 动效只用于表达状态变化，150~320ms，不炫技
+ *
+ * 用法约定：
+ *   - 组件里禁止硬编码颜色/间距/字号，一律引用本文件令牌
+ *   - 亮色为默认值；暗色在 .dark / [data-theme="dark"] 下覆盖
+ *   - 新增令牌前先确认现有档位不够用，避免出现 --space-7 这类凑数值
+ * ========================================================================== */
+
+/* ==========================================================================
+ * 1. 设计令牌 — 亮色（默认）
+ * ========================================================================== */
+
+:root {
+  /* -------------------- 中性色阶（微暖，避免冷灰的塑料感） -------------------- */
+  --neutral-0: #ffffff; /* 表面：卡片、弹窗 */
+  --neutral-25: #fcfcfb; /* 次级表面：卡内分区、表头 */
+  --neutral-50: #f8f8f6; /* 页面底色 */
+  --neutral-100: #f1f1ee; /* 悬浮态、内嵌区 */
+  --neutral-200: #e4e4df; /* 主描边 */
+  --neutral-300: #d0d0c9; /* 强描边、控件边框 */
+  --neutral-400: #8a8a82; /* 禁用/占位文字（仅限非正文信息） */
+  --neutral-500: #6e6e66; /* 次要文字（白底 4.6:1） */
+  --neutral-600: #5b5b54; /* 正文（次级） */
+  --neutral-700: #414140; /* 深色底上的正文 */
+  --neutral-800: #2c2c2a;
+  --neutral-900: #1c1c1a; /* 主要文字 */
+
+  /* -------------------- 品牌色阶（低饱和靛紫，非霓虹蓝） -------------------- */
+  --brand-50: #f3f2fa;
+  --brand-100: #e8e6f5;
+  --brand-200: #d2ceec;
+  --brand-300: #b2abdf;
+  --brand-400: #8e86ce;
+  --brand-500: #6b62b4; /* 主色：选中态、链接、主按钮 */
+  --brand-600: #574f9a; /* hover / pressed */
+  --brand-700: #443e78;
+
+  /* -------------------- 语义色（每色仅 3 档：底色 / 主色 / 深色） -------------------- */
+  --success-50: #edf5ef;
+  --success-500: #3f7d51; /* 白字 4.9:1 */
+  --success-600: #356846;
+
+  --warning-50: #faf2e6;
+  --warning-500: #966c29; /* 白字 4.7:1 */
+  --warning-600: #7d5a22;
+
+  --danger-50: #faedec;
+  --danger-500: #a84a43;
+  --danger-600: #8d3d37;
+
+  --info-50: #edf2f6;
+  --info-500: #476f87;
+  --info-600: #3a5b6f;
+
+  /* -------------------- 语义化别名（组件优先用这组） -------------------- */
+  --text-1: var(--neutral-900); /* 标题、正文主色 */
+  --text-2: var(--neutral-500); /* 副标题、辅助说明 */
+  --text-3: var(--neutral-400); /* 极弱提示、时间戳 */
+  --text-on-brand: #ffffff;
+
+  --bg-page: var(--neutral-50);
+  --bg-surface: var(--neutral-0);
+  --bg-subtle: var(--neutral-25);
+  --bg-hover: var(--neutral-100);
+  --bg-active: var(--neutral-200);
+
+  --border-1: var(--neutral-200); /* 常规描边 */
+  --border-2: var(--neutral-300); /* 强描边：输入框、表格框 */
+
+  --focus-ring: 0 0 0 3px rgb(var(--brand-rgb) / 18%);
+
+  /* -------------------- RGB 三元组（供 alpha 合成：rgb(var(--x-rgb) / 12%)） --------------------
+   * 亮暗模式下同一语义色的分量不同，用三元组才能让半透明底色跟着模式走。 */
+  --brand-rgb: 107 98 180;
+  --success-rgb: 63 125 81;
+  --warning-rgb: 150 108 41;
+  --danger-rgb: 168 74 67;
+  --info-rgb: 71 111 135;
+  --white-rgb: 255 255 255;
+  --black-rgb: 20 20 18;
+
+  /* 遮罩：弹窗/抽屉背景，暗色下需要更黑 */
+  --overlay: rgb(var(--black-rgb) / 32%);
+
+  /* -------------------- 阴影（极轻柔，浮层才用明显阴影） -------------------- */
+  --shadow-xs: 0 1px 1px rgba(28, 28, 26, 0.03);
+  --shadow-sm: 0 1px 2px rgba(28, 28, 26, 0.04), 0 1px 1px rgba(28, 28, 26, 0.03);
+  --shadow-md: 0 2px 6px rgba(28, 28, 26, 0.05), 0 1px 2px rgba(28, 28, 26, 0.04);
+  --shadow-lg: 0 8px 20px rgba(28, 28, 26, 0.07), 0 2px 6px rgba(28, 28, 26, 0.04);
+  --shadow-xl: 0 16px 40px rgba(28, 28, 26, 0.1), 0 4px 10px rgba(28, 28, 26, 0.05);
+
+  /* -------------------- 圆角（每页最多 3 种档位） -------------------- */
+  --radius-xs: 4px; /* 标签、徽标 */
+  --radius-sm: 6px; /* 小控件、按钮 */
+  --radius-md: 8px; /* 输入框、主要控件 */
+  --radius-lg: 12px; /* 卡片、面板 */
+  --radius-xl: 16px; /* 弹窗、大容器 */
+  --radius-full: 9999px;
+
+  /* -------------------- 间距（4px 网格） -------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* -------------------- 字号与行高 -------------------- */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px; /* 正文基准 */
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 32px;
+
+  --leading-tight: 1.25; /* 大标题 */
+  --leading-snug: 1.4; /* 小标题 */
+  --leading-normal: 1.55; /* 正文 */
+  --leading-relaxed: 1.7; /* 长文本 */
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --tracking-tight: -0.01em; /* 大字号收紧，视觉更整 */
+
+  /* -------------------- 字体族 -------------------- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  /* -------------------- 动效 -------------------- */
+  --duration-fast: 140ms; /* hover / focus */
+  --duration-normal: 220ms; /* 展开收起、淡入淡出 */
+  --duration-slow: 320ms; /* 弹窗、页面切换 */
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* 进入 */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /* 通用双向 */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1); /* 退出 */
+
+  /* -------------------- 布局尺寸 -------------------- */
+  --shell-header-h: 56px;
+  --shell-header-h-mobile: 52px;
+  --shell-tabbar-h: 60px;
+  --shell-max-w: 1280px; /* 内容最大宽度，超宽屏不再拉长 */
+  --shell-gutter: var(--space-6); /* 内容左右内边距 */
+
+  /* -------------------- 触摸目标 -------------------- */
+  --touch-min: 44px; /* 移动端最小可点区域 */
+
+  /* -------------------- 层级 -------------------- */
+  /* z-index 阶梯。
+   * 注意：这里只是「自绘元素之间」的阶梯。naive 自己的弹窗 / 抽屉 / 提示走它内部
+   * 的 z-index 阶梯（2000 起、每个实例递增），因此任何需要盖住 naive 弹窗的自绘
+   * 浮层，用下面的 --z-modal(1000) 都会被压住——目录选择弹窗曾因此被创建任务向导
+   * 完全盖住。这类浮层请用 --z-above-naive，或直接改用 naive 的弹窗组件。 */
+  --z-base: 1;
+  --z-sticky: 100; /* 吸顶页头 */
+  --z-tabbar: 100;
+  --z-dropdown: 400;
+  --z-overlay: 800; /* 遮罩 */
+  --z-drawer: 900;
+  --z-modal: 1000;
+  --z-toast: 1100;
+  --z-tooltip: 1200;
+  --z-above-naive: 2100; /* 需盖住 naive 弹窗的自绘浮层（命令面板） */
+}
+
+/* ==========================================================================
+ * 2. 设计令牌 — 暗色（深暖灰，不用纯黑：纯黑配白字对比过硬）
+ * ========================================================================== */
+
+.dark,
+[data-theme='dark'] {
+  --text-1: #f2f2ef;
+  --text-2: #a4a49d;
+  --text-3: #75756f;
+
+  --bg-page: #131312;
+  --bg-surface: #1b1b1a;
+  --bg-subtle: #232322;
+  --bg-hover: #2a2a28;
+  --bg-active: #333330;
+
+  --border-1: #2e2e2c;
+  --border-2: #3d3d3a;
+
+  --brand-50: #26243a;
+  --brand-100: #2f2c47;
+  --brand-200: #3d3960;
+  --brand-300: #5f5891;
+  --brand-400: #8e86ce;
+  --brand-500: #9a93d8; /* 暗色下主色提亮，保证 4.5:1 对比 */
+  --brand-600: #b3adde;
+  --brand-700: #cdc8ea;
+
+  --success-50: #1e2a21;
+  --success-500: #6cae80;
+  --success-600: #8bc39c;
+
+  --warning-50: #2a2419;
+  --warning-500: #c99a4e;
+  --warning-600: #dbb069;
+
+  --danger-50: #2b1f1e;
+  --danger-500: #d1776f;
+  --danger-600: #e0928b;
+
+  --info-50: #1c2529;
+  --info-500: #6f9cb4;
+  --info-600: #8bb2c7;
+
+  --focus-ring: 0 0 0 3px rgb(var(--brand-rgb) / 30%);
+
+  --brand-rgb: 154 147 216;
+  --success-rgb: 108 174 128;
+  --warning-rgb: 201 154 78;
+  --danger-rgb: 209 119 111;
+  --info-rgb: 111 156 180;
+  --black-rgb: 0 0 0;
+
+  --overlay: rgb(var(--black-rgb) / 56%);
+
+  /* 暗色下阴影需更重才有分离感，但仍保持低对比避免发灰 */
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.24);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.36), 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 8px 20px rgba(0, 0, 0, 0.44), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.52), 0 4px 10px rgba(0, 0, 0, 0.34);
+}
+
+/* ==========================================================================
+ * 3. 响应式令牌覆盖
+ *
+ * 断点：<768 移动 · 768~1023 平板 · >=1024 桌面（与 useMobileLayout 保持一致）
+ * ========================================================================== */
+
+@media (max-width: 767px) {
+  :root {
+    --shell-gutter: var(--space-4);
+    --shell-header-h: var(--shell-header-h-mobile);
+  }
+}

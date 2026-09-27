@@ -1,0 +1,29 @@
+"""服务名常量 - 供组合根注册与解析使用（零依赖共享内核）。"""
+
+
+# Service name constants
+class Services:
+    """Service name constants for type-safe access."""
+
+    CONFIG = "config_service"
+    TMDB = "tmdb_service"
+    PARSER = "parser_service"
+    NFO = "nfo_service"
+    RENAME = "rename_service"
+    IMAGE = "image_service"
+    SUBTITLE = "subtitle_service"
+    EMBY = "emby_service"
+    SCRAPER = "scraper_service"
+    WATCHER = "watcher_service"
+    AUTH = "auth_service"
+    SESSION = "session_service"
+    HISTORY = "history_service"
+    FILE = "file_service"
+    P115 = "p115_service"
+    SCRAPED_FILE = "scraped_file_service"
+    MANUAL_JOB = "manual_job_service"
+    SCRAPE_JOB = "scrape_job_service"
+    SCHEDULER = "scheduler_service"
+    TEMPLATE = "template_service"
+    WEBSOCKET = "websocket_manager"
+    LOG = "log_service"

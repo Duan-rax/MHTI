@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useWebSocket } from '@/shared/composables/useWebSocket'
+import { createTokenManager } from '@/stores/authTokens'
 import {
   authApi,
   type LoginRequest,
@@ -10,13 +12,7 @@ import {
   type UserProfile,
   type ChangePasswordRequest,
   type UpdateUsernameRequest,
-} from '@/api/auth'
-
-// Token 存储键
-const ACCESS_TOKEN_KEY = 'access_token'
-const REFRESH_TOKEN_KEY = 'refresh_token'
-const SESSION_ID_KEY = 'session_id'
-const EXPIRES_AT_KEY = 'expires_at'
+} from '@/modules/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   // 状态
@@ -28,9 +24,6 @@ export const useAuthStore = defineStore('auth', () => {
   const expiresAt = ref<number | null>(null)
   const avatar = ref<string | null>(null)
 
-  // 刷新定时器
-  let refreshTimer: ReturnType<typeof setTimeout> | null = null
-
   // 计算属性
   const shouldRefresh = computed(() => {
     if (!expiresAt.value) return false
@@ -38,94 +31,17 @@ export const useAuthStore = defineStore('auth', () => {
     return Date.now() > expiresAt.value - 60 * 1000
   })
 
-  // Token 管理
-  function getAccessToken(): string | null {
-    return localStorage.getItem(ACCESS_TOKEN_KEY)
-  }
-
-  function getRefreshToken(): string | null {
-    return localStorage.getItem(REFRESH_TOKEN_KEY)
-  }
-
-  function setTokens(
-    accessToken: string,
-    refreshToken: string,
-    session: string,
-    expiresIn: number
-  ) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
-    localStorage.setItem(SESSION_ID_KEY, session)
-
-    const expireTime = Date.now() + expiresIn * 1000
-    localStorage.setItem(EXPIRES_AT_KEY, expireTime.toString())
-    expiresAt.value = expireTime
-    sessionId.value = session
-
-    // 设置自动刷新
-    setupAutoRefresh(expiresIn)
-  }
-
-  function updateAccessToken(accessToken: string, expiresIn: number) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
-    const expireTime = Date.now() + expiresIn * 1000
-    localStorage.setItem(EXPIRES_AT_KEY, expireTime.toString())
-    expiresAt.value = expireTime
-
-    setupAutoRefresh(expiresIn)
-  }
-
-  function clearTokens() {
-    localStorage.removeItem(ACCESS_TOKEN_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-    localStorage.removeItem(SESSION_ID_KEY)
-    localStorage.removeItem(EXPIRES_AT_KEY)
-    expiresAt.value = null
-    sessionId.value = null
-
-    if (refreshTimer) {
-      clearTimeout(refreshTimer)
-      refreshTimer = null
-    }
-  }
-
-  // 自动刷新设置
-  function setupAutoRefresh(expiresIn: number) {
-    if (refreshTimer) {
-      clearTimeout(refreshTimer)
-    }
-
-    // 在过期前 1 分钟刷新
-    const refreshDelay = Math.max((expiresIn - 60) * 1000, 10000)
-
-    refreshTimer = setTimeout(async () => {
-      await refreshAccessToken()
-    }, refreshDelay)
-  }
-
-  // 刷新 Access Token
-  async function refreshAccessToken(): Promise<boolean> {
-    const refreshToken = getRefreshToken()
-    if (!refreshToken) {
-      console.log('[Auth] 没有 Refresh Token，无法刷新')
-      return false
-    }
-
-    try {
-      console.log('[Auth] 调用刷新 API')
-      const response = await authApi.refresh({ refresh_token: refreshToken })
-      updateAccessToken(response.data.access_token, response.data.expires_in)
-      console.log('[Auth] 刷新成功，新 Token 有效期', response.data.expires_in, '秒')
-      return true
-    } catch (error) {
-      console.log('[Auth] 刷新 API 失败', error)
-      // 刷新失败，清除登录状态
-      clearTokens()
-      isAuthenticated.value = false
-      username.value = null
-      return false
-    }
-  }
+  // Token 生命周期（localStorage + 自动刷新，见 authTokens.ts）
+  const {
+    getAccessToken,
+    getRefreshToken,
+    setTokens,
+    clearTokens,
+    setupAutoRefresh,
+    refreshAccessToken,
+    getStoredExpiresAt,
+    getStoredSessionId,
+  } = createTokenManager({ expiresAt, sessionId, isAuthenticated, username })
 
   // 检查初始化状态
   async function checkInitialized(): Promise<boolean> {
@@ -151,6 +67,8 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = true
     username.value = data.username
     isInitialized.value = true
+    // 登录成功后建立实时通道（token 已写入，WS 服务端要求鉴权）
+    useWebSocket().connect()
   }
 
   // 登录
@@ -175,13 +93,15 @@ export const useAuthStore = defineStore('auth', () => {
     )
     isAuthenticated.value = true
     username.value = user
+    // 注册成功后建立实时通道
+    useWebSocket().connect()
   }
 
   // 检查认证状态
   async function checkAuth(): Promise<boolean> {
     const token = getAccessToken()
     const refreshToken = getRefreshToken()
-    const storedExpiresAt = localStorage.getItem(EXPIRES_AT_KEY)
+    const storedExpiresAt = getStoredExpiresAt()
 
     console.log('[Auth] checkAuth 开始', {
       hasAccessToken: !!token,
@@ -199,11 +119,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 恢复过期时间
     if (storedExpiresAt) {
-      expiresAt.value = parseInt(storedExpiresAt, 10)
+      expiresAt.value = storedExpiresAt
     }
 
     // 恢复 session ID
-    sessionId.value = localStorage.getItem(SESSION_ID_KEY)
+    sessionId.value = getStoredSessionId()
 
     // 检查是否需要刷新
     if (shouldRefresh.value) {
@@ -224,6 +144,11 @@ export const useAuthStore = defineStore('auth', () => {
       username.value = response.data.username
       sessionId.value = response.data.session_id
       isReady.value = true
+
+      // 已有登录态时（如刷新页面后恢复）建立实时通道
+      if (isAuthenticated.value) {
+        useWebSocket().connect()
+      }
 
       // 设置自动刷新
       if (expiresAt.value) {

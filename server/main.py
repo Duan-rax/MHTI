@@ -64,31 +64,31 @@ if extra_origins := os.getenv("CORS_ORIGINS"):
     CORS_ORIGINS.extend(extra_origins.split(","))
 
 # API Routers
-from server.api.auth import router as auth_router
-from server.api.config import router as config_router
-from server.api.emby import router as emby_router
-from server.api.files import router as files_router
-from server.api.history import router as history_router
-from server.api.images import router as images_router
-from server.api.manual_job import router as manual_job_router
-from server.api.nfo import router as nfo_router
-from server.api.parser import router as parser_router
-from server.api.rename import router as rename_router
-from server.api.scheduler import router as scheduler_router
-from server.api.scrape_job import router as scrape_job_router
-from server.api.scraper import router as scraper_router
-from server.api.subtitles import router as subtitles_router
-from server.api.templates import router as templates_router
-from server.api.tmdb import router as tmdb_router
-from server.api.watcher import router as watcher_router
-from server.api.websocket import router as websocket_router
-from server.api.frontend_config import router as frontend_config_router
-from server.api.logs import router as logs_router
+from server.api.v1.auth import router as auth_router
+from server.api.v1.config import router as config_router
+from server.api.v1.emby import router as emby_router
+from server.api.v1.files import router as files_router
+from server.api.v1.history import router as history_router
+from server.api.v1.images import router as images_router
+from server.api.v1.manual_job import router as manual_job_router
+from server.api.v1.nfo import router as nfo_router
+from server.api.v1.parser import router as parser_router
+from server.api.v1.rename import router as rename_router
+from server.api.v1.scheduler import router as scheduler_router
+from server.api.v1.scrape_job import router as scrape_job_router
+from server.api.v1.scraper import router as scraper_router
+from server.api.v1.subtitles import router as subtitles_router
+from server.api.v1.templates import router as templates_router
+from server.api.v1.tmdb import router as tmdb_router
+from server.api.v1.watcher import router as watcher_router
+from server.api.v1.websocket import router as websocket_router
+from server.api.v1.frontend_config import router as frontend_config_router
+from server.api.v1.logs import router as logs_router
 
 # Core components
-from server.core.container import init_services, cleanup_services, get_watcher_service
-from server.core.database import init_database, close_database
-from server.core.middleware import setup_exception_handlers, setup_middleware
+from server.bootstrap import init_services, cleanup_services, get_watcher_service
+from server.infrastructure.db import init_database, close_database
+from server.api.middleware import setup_exception_handlers, setup_middleware
 
 
 @asynccontextmanager
@@ -104,20 +104,29 @@ async def lifespan(app: FastAPI):
     await init_database()
 
     # Initialize authentication configuration from database
-    from server.core.config import init_auth_config
-    await init_auth_config()
+    from server.infrastructure.config import get_app_config
+    from server.domain.identity.auth_config_service import get_auth_config_service_async
+
+    auth_config_service = await get_auth_config_service_async()
+    get_app_config().set_auth_config(await auth_config_service.get_auth_config())
     logger.info("Authentication configuration loaded from database")
+
+    # 注入 Token 校验实现（鉴权端口实现在上层，由组合根装配）
+    from server.api.deps import set_token_verifier
+    from server.domain.identity.auth_service import auth_service
+
+    set_token_verifier(auth_service)
 
     # Initialize service container
     await init_services()
 
     # Initialize and start log service
-    from server.core.container import get_log_service
+    from server.bootstrap import get_log_service
     log_service = get_log_service()
     await log_service.start()
 
     # Setup database log handler (仅记录 WARNING 及以上级别，减少性能开销)
-    from server.core.log_handler import DatabaseLogHandler
+    from server.infrastructure.log_handler import DatabaseLogHandler
     db_log_handler = DatabaseLogHandler(log_service, batch_size=50, flush_interval=10.0)
     db_log_handler.setLevel(logging.WARNING)  # 只记录警告和错误
     db_log_handler.setFormatter(logging.Formatter(LOG_FORMAT))
@@ -141,8 +150,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down application...")
 
     # 取消后台 worker（刮削 + 手动任务），避免它们阻塞在队列上导致退出卡顿
-    from server.services.scrape_job_service import shutdown_workers as shutdown_scrape_workers
-    from server.services.manual_job_service import shutdown_workers as shutdown_manual_workers
+    from server.application.scrape_job_service import shutdown_workers as shutdown_scrape_workers
+    from server.application.manual_job_service import shutdown_workers as shutdown_manual_workers
     await shutdown_scrape_workers()
     await shutdown_manual_workers()
 
@@ -176,7 +185,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MHTI API",
     description="API for scanning and scraping TV series metadata",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -233,7 +242,7 @@ async def health_check() -> dict:
     - Database connection status
     - External service configurations
     """
-    from server.core.database import get_db_manager
+    from server.infrastructure.db import get_db_manager
 
     health_status = {
         "status": "healthy",
@@ -256,7 +265,7 @@ async def health_check() -> dict:
 
     # Check TMDB configuration (non-blocking)
     try:
-        from server.core.container import get_config_service
+        from server.bootstrap import get_config_service
         config_service = get_config_service()
         tmdb_cookie = await config_service.get_tmdb_cookie()
         tmdb_token = await config_service.get_tmdb_api_token()
@@ -271,7 +280,7 @@ async def health_check() -> dict:
 
     # Check Emby configuration (non-blocking)
     try:
-        from server.core.container import get_emby_service
+        from server.bootstrap import get_emby_service
         emby_service = get_emby_service()
         emby_config = await emby_service.get_config()
         health_status["checks"]["emby_configured"] = "configured" if emby_config.enabled else "disabled"
@@ -294,7 +303,7 @@ async def readiness_check() -> dict:
 
     Returns unhealthy if database is not accessible.
     """
-    from server.core.database import get_db_manager
+    from server.infrastructure.db import get_db_manager
 
     try:
         manager = await get_db_manager()
@@ -314,7 +323,7 @@ async def root() -> dict[str, str]:
     """Root endpoint with API information."""
     return {
         "name": "MHTI API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "docs": "/api/docs",
     }
 

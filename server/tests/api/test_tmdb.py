@@ -12,11 +12,11 @@ from fastapi.testclient import TestClient
 import httpx
 
 from server.main import app
-from server.core.auth import require_auth, AuthContext
-from server.core.container import get_tmdb_service
-from server.core.exceptions import TMDBTimeoutError, TMDBConnectionError, TMDBNotFoundError
-from server.services.config_service import ConfigService
-from server.services.tmdb_service import TMDBService
+from server.api.deps import require_auth, AuthContext
+from server.bootstrap import get_tmdb_service
+from server.common.exceptions import TMDBTimeoutError, TMDBConnectionError, TMDBNotFoundError
+from server.domain.system.config_service import ConfigService
+from server.domain.metadata.tmdb_service import TMDBService
 from server.models.tmdb import (
     TMDBSearchResponse,
     TMDBSearchResult,

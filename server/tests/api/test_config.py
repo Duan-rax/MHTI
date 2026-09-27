@@ -6,6 +6,7 @@
 
 import asyncio
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -13,17 +14,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from server.main import app
-from server.core.container import get_config_service, get_p115_service, get_tmdb_service
+from server.bootstrap import get_config_service, get_p115_service, get_tmdb_service
+from server.models.config import ApiTokenStatus
 from server.models.cloud_115 import (
+    Cloud115Account,
+    Cloud115AccountInfo,
     Cloud115Config,
     Cloud115DeviceOption,
+    Cloud115Membership,
     Cloud115QrSession,
     Cloud115QrStatus,
     Cloud115Status,
+    Cloud115Storage,
 )
-from server.services.config_service import ConfigService
-from server.services.p115_service import P115Service
-from server.services.tmdb_service import TMDBService
+from server.domain.system.config_service import ConfigService
+from server.domain.integration.p115_service import P115Service
+from server.domain.metadata.tmdb_service import TMDBService
 
 
 @pytest.fixture
@@ -51,13 +57,6 @@ def config_client(temp_db: Path, override_auth) -> TestClient:
     p115_service.list_login_devices = Mock(
         return_value=[
             Cloud115DeviceOption(value="web", label="115生活_网页端", group="standard"),
-            Cloud115DeviceOption(value="desktop", label="115浏览器", group="alias"),
-            Cloud115DeviceOption(value="bios", label="未知: ios", group="alias"),
-            Cloud115DeviceOption(value="bandroid", label="未知: android", group="alias"),
-            Cloud115DeviceOption(value="bipad", label="未知: ipad", group="alias"),
-            Cloud115DeviceOption(value="windows", label="Windows 别名", group="alias"),
-            Cloud115DeviceOption(value="mac", label="macOS 别名", group="alias"),
-            Cloud115DeviceOption(value="linux", label="Linux 别名", group="alias"),
             Cloud115DeviceOption(value="alipaymini", label="115生活_支付宝小程序", group="standard"),
         ]
     )
@@ -78,6 +77,30 @@ def config_client(temp_db: Path, override_auth) -> TestClient:
         )
     )
     p115_service.clear_login_state = AsyncMock()
+    p115_service.get_account_info = AsyncMock(
+        return_value=Cloud115AccountInfo(
+            is_logged_in=True,
+            is_session_valid=True,
+            account=Cloud115Account(
+                user_id="336320871",
+                nickname="测试账号",
+                avatar_url="https://avatars.115.com/01/xxx_l.jpg",
+                device_count=8,
+            ),
+            membership=Cloud115Membership(
+                is_vip=True,
+                level_name="年费VIP",
+                expire_date="2028-07-01",
+            ),
+            storage=Cloud115Storage(
+                used_bytes=37474186538573,
+                total_bytes=75136879795860,
+                used_text="34.08TB",
+                total_text="68.34TB",
+                used_percent=49.87,
+            ),
+        )
+    )
 
     def override_config_service():
         return config_service
@@ -218,11 +241,21 @@ class TestAPITokenAPI:
         assert data["is_configured"] is False
 
     def test_save_api_token_mocked_success(self, config_client):
-        """Test saving API token with mocked verification."""
-        with patch.object(
-            TMDBService, "verify_api_token", new_callable=AsyncMock
-        ) as mock_verify:
+        """Test saving API token with mocked verification.
+
+        保存现在会顺带探测 R18（打 TMDB），测试同样把它换掉：否则用例成败取决于
+        当前环境能不能联上 TMDB，且会挂到超时。
+        """
+        with (
+            patch.object(
+                TMDBService, "verify_api_token", new_callable=AsyncMock
+            ) as mock_verify,
+            patch.object(
+                TMDBService, "check_adult_access", new_callable=AsyncMock
+            ) as mock_adult,
+        ):
             mock_verify.return_value = (True, None)
+            mock_adult.return_value = (True, "已开启（关键词「hentai」命中成人内容）")
 
             response = config_client.post(
                 "/api/config/api-token",
@@ -232,6 +265,7 @@ class TestAPITokenAPI:
             assert response.status_code == 200
             data = response.json()
             assert data["success"] is True
+            assert data["status"]["adult_enabled"] is True
 
     def test_save_api_token_invalid(self, config_client):
         """Test saving API token with mocked failed verification."""
@@ -248,6 +282,8 @@ class TestAPITokenAPI:
             assert response.status_code == 200
             data = response.json()
             assert data["success"] is False
+            # 验证失败时不探测 R18（避免用无效凭据白打 TMDB）
+            assert data["status"]["adult_enabled"] is None
 
     def test_save_api_token_empty(self, config_client):
         """Test saving empty API token."""
@@ -273,6 +309,35 @@ class TestAPITokenAPI:
         response = config_client.post("/api/config/api-token", json={})
 
         assert response.status_code == 422
+
+    def test_verify_endpoint_returns_refreshed_status(self, config_client):
+        """POST /api-token/verify 走远端重验 + 重探 R18。"""
+        with patch.object(
+            TMDBService, "refresh_token_status", new_callable=AsyncMock
+        ) as mock_refresh:
+            mock_refresh.return_value = ApiTokenStatus(
+                is_configured=True,
+                is_valid=True,
+                adult_enabled=False,
+                adult_message="未开启：TMDB 账户设置里隐藏了成人内容，刮削会找不到任何结果",
+                adult_checked_at=datetime(2026, 9, 26, 15, 2),
+            )
+
+            response = config_client.post("/api/config/api-token/verify")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_valid"] is True
+        assert data["adult_enabled"] is False
+        assert "未开启" in data["adult_message"]
+        assert data["adult_checked_at"] is not None
+
+    def test_verify_endpoint_without_token(self, config_client):
+        """未配置 Token 时返回未配置（不报错）。"""
+        response = config_client.post("/api/config/api-token/verify")
+
+        assert response.status_code == 200
+        assert response.json()["is_configured"] is False
 
 
 class TestLanguageAPI:
@@ -376,23 +441,28 @@ class TestCloud115API:
         }
         config_client.p115_service.get_status.assert_awaited_once()
 
+    def test_get_115_account_info(self, config_client):
+        """Test getting 115 account details (identity / membership / storage)."""
+        response = config_client.get("/api/config/115/account")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["is_session_valid"] is True
+        assert payload["account"]["nickname"] == "测试账号"
+        assert payload["account"]["user_id"] == "336320871"
+        assert payload["membership"]["level_name"] == "年费VIP"
+        assert payload["storage"]["used_text"] == "34.08TB"
+        assert payload["storage"]["used_percent"] == 49.87
+        config_client.p115_service.get_account_info.assert_awaited_once()
+
     def test_get_115_devices(self, config_client):
         """Test listing supported 115 login devices."""
         response = config_client.get("/api/config/115/devices")
 
         assert response.status_code == 200
         data = response.json()
-        assert {item["value"] for item in data["items"]} >= {
-            "web",
-            "desktop",
-            "bios",
-            "bandroid",
-            "bipad",
-            "windows",
-            "mac",
-            "linux",
-            "alipaymini",
-        }
+        assert [item["value"] for item in data["items"]] == ["web", "alipaymini"]
+        assert {item["group"] for item in data["items"]} == {"standard"}
         config_client.p115_service.list_login_devices.assert_called_once_with()
 
     def test_start_115_qrcode_login(self, config_client):
