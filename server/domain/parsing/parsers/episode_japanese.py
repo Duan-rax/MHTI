@@ -99,8 +99,8 @@ _KANJI_CHAR_CLASS = f"[{re.escape(KANJI_CHARS)}]"
 
 DYNAMIC_EPISODE_PATTERNS = [
     # ===== 第X話/集/回/章/弾/幕 =====
-    (r"第\s*(\d+)\s*[話话集回章弾幕]", "digit"),
-    (rf"第\s*({_KANJI_CHAR_CLASS}+)\s*[話话集回章弾幕]", "kanji"),
+    (r"第\s*(\d+)\s*[話话集回章弾幕夜巻卷]", "digit"),
+    (rf"第\s*({_KANJI_CHAR_CLASS}+)\s*[話话集回章弾幕夜巻卷]", "kanji"),
 
     # ===== 其の/其ノ/其之/其乃 + 数字（日语古风）=====
     # 含平假名写法「その」（实测：作品名 その1）
@@ -124,6 +124,8 @@ DYNAMIC_EPISODE_PATTERNS = [
     # ===== Act N / Scene N（舞台剧风格）=====
     (r"[Aa]ct\.?\s*(\d+)", "digit"),
     (r"[Ss]cene\.?\s*(\d+)", "digit"),
+    (r"(?:[Pp]art|[Ss]oul)\.?\s*(\d+)", "digit"),
+    (r"(\d+)(?:st|nd|rd|th)", "digit"),
 
     # ===== 話/集/回/章 + 数字（后置形式）=====
     (r"(\d+)\s*[話话集回章](?:\s|$|[^\d])", "digit"),
@@ -234,7 +236,7 @@ class EpisodeJapanesePlugin(ParserPlugin):
         # 1. 先检查固定模式（前篇/后篇等）- 优先级最高
         # 这些模式明确指定了集数，应该优先处理
         for pattern, episode in FIXED_EPISODE_PATTERNS:
-            if re.search(pattern, text):
+            if re.search(pattern, text, flags=re.I):
                 ctx.episode = episode
                 # 固定模式默认 season=1（除非已经被设置）
                 if ctx.season is None:
@@ -245,7 +247,7 @@ class EpisodeJapanesePlugin(ParserPlugin):
         # 2. 检查特别篇/发行形态标记（仅用于集数兜底）
         is_special = False
         for pattern in SPECIAL_PATTERNS:
-            if re.search(pattern, text):
+            if re.search(pattern, text, flags=re.I):
                 is_special = True
                 ctx.matched_patterns.append(f"{self.name}:special")
                 break
@@ -253,7 +255,7 @@ class EpisodeJapanesePlugin(ParserPlugin):
         # 3. 检查动态模式（在原始和标准化文本上都尝试）
         for search_text in [text, text_normalized]:
             for pattern, num_type in DYNAMIC_EPISODE_PATTERNS:
-                match = re.search(pattern, search_text)
+                match = re.search(pattern, search_text, flags=re.I)
                 if match:
                     if num_type == "digit":
                         ctx.episode = int(match.group(1))

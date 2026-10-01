@@ -9,6 +9,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from server.common.logging_filters import install_secret_redaction_filter
+
 # 日志目录
 LOG_DIR = Path(__file__).parent.parent / "data" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -21,6 +23,7 @@ logging.basicConfig(
     level=logging.INFO,
     format=LOG_FORMAT,
 )
+install_secret_redaction_filter()
 logger = logging.getLogger(__name__)
 
 

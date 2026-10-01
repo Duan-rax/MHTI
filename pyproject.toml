@@ -18,6 +18,7 @@ sse-starlette = "^2.0.0"
 watchdog = "^4.0.0"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 p115client = "0.0.8.6.6"
+opencc-python-reimplemented = "^0.1.7"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

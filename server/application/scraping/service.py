@@ -711,6 +711,10 @@ class ScraperService:
             # 只保留成人内容
             adult_results = [r for r in search_response.results if r.adult]
             result.search_results = adult_results
+            if search_response.query != parsed.series_name and adult_results:
+                search_step.logs.append(
+                    ScrapeLogEntry(message=f"回退关键词命中: {search_response.query}")
+                )
             search_step.logs.append(ScrapeLogEntry(message=f"找到 {len(adult_results)} 个匹配结果"))
             await notify_log_update()
         except httpx.TimeoutException:

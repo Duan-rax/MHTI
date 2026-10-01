@@ -23,11 +23,11 @@ EPISODE_MARKERS = [
     r"[Ee][Pp]?\d{1,3}",                       # EP01, E01
 
     # ===== 中文格式 =====
-    r"第\d+[季集话回章弾話幕]",               # 第1季, 第1集, 第1話
-    r"第[一二三四五六七八九十百]+[季集话回章弾話幕]",  # 第一季, 第一集
+    r"第\d+[季集话回章弾話幕夜巻卷]",               # 第1季, 第1集, 第1夜
+    r"第[一二三四五六七八九十百]+[季集话回章弾話幕夜巻卷]",  # 第一季, 第一集
     r"第\s*\d{1,3}\s*[-~〜～ー]\s*\d{1,3}\s*[話话集回章弾幕]",  # 第1-2話（多集文件）
     # ===== 日语格式 =====
-    r"前編|後編|前篇|後篇|上巻|下巻|中編|中篇",  # 前篇/后篇
+    r"前編|前编|後編|后編|后编|前篇|後篇|后篇|上巻|上卷|下巻|下卷|中編|中篇|中编",
     r"上集|下集|中集",                        # 上/下集
     rf"[其そ][のノ之乃][{KANJI_CHARS}\d]+",  # 其の一, その1
     r"[＃#♯]\d+",                            # #1
@@ -41,6 +41,8 @@ EPISODE_MARKERS = [
     r"巻\s*\d+",                              # 巻1
     r"Episode\s*\d+",                         # Episode 1
     r"Act\.?\s*\d+",                          # Act 1
+    r"(?:Part|Soul)\.?\s*\d+",                # part1, soul.3
+    r"\d+(?:st|nd|rd|th)",                      # 1st, 2nd
     r"\[\d{1,3}\]",                           # [01]
     r"\(\d{1,2}\)\s*$",                       # (1) 在末尾
 
@@ -119,7 +121,7 @@ class SeriesNamePlugin(ParserPlugin):
 
         for pattern in EPISODE_MARKERS:
             try:
-                match = re.search(pattern, text)
+                match = re.search(pattern, text, flags=re.I)
                 if match and match.start() < earliest_pos:
                     earliest_pos = match.start()
             except re.error:

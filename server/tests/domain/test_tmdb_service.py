@@ -1,13 +1,14 @@
 """Unit tests for TMDBService."""
 
-import pytest
-from pathlib import Path
 import tempfile
-from unittest.mock import AsyncMock, patch, MagicMock
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from server.common.exceptions import TMDBTimeoutError
 from server.domain.metadata.tmdb_service import TMDBService
 from server.domain.system.config_service import ConfigService
-from server.common.exceptions import TMDBTimeoutError
 
 
 @pytest.fixture
@@ -104,9 +105,7 @@ class TestTMDBServiceAPIToken:
     @pytest.mark.asyncio
     async def test_save_and_verify_mocked_success(self, tmdb_service):
         """Test save with mocked successful verification."""
-        with patch.object(
-            tmdb_service, "verify_api_token", new_callable=AsyncMock
-        ) as mock_verify:
+        with patch.object(tmdb_service, "verify_api_token", new_callable=AsyncMock) as mock_verify:
             mock_verify.return_value = (True, None)
 
             status = await tmdb_service.save_and_verify_api_token("valid_token")
@@ -118,9 +117,7 @@ class TestTMDBServiceAPIToken:
     @pytest.mark.asyncio
     async def test_save_and_verify_mocked_failure(self, tmdb_service):
         """Test save with mocked failed verification."""
-        with patch.object(
-            tmdb_service, "verify_api_token", new_callable=AsyncMock
-        ) as mock_verify:
+        with patch.object(tmdb_service, "verify_api_token", new_callable=AsyncMock) as mock_verify:
             mock_verify.return_value = (False, "Invalid API key")
 
             status = await tmdb_service.save_and_verify_api_token("invalid_token")
@@ -274,18 +271,12 @@ class TestAdultAccessCheck:
         assert "超时" in message
 
     @pytest.mark.asyncio
-    async def test_refresh_token_status_persists_adult_result(
-        self, tmdb_service, config_service
-    ):
+    async def test_refresh_token_status_persists_adult_result(self, tmdb_service, config_service):
         """重新检测：远端重验 + 重探 R18，并把结论写进状态。"""
         await config_service.save_api_token("eyJfake_token")
         with (
-            patch.object(
-                tmdb_service, "verify_api_token", new_callable=AsyncMock
-            ) as mock_verify,
-            patch.object(
-                tmdb_service, "check_adult_access", new_callable=AsyncMock
-            ) as mock_adult,
+            patch.object(tmdb_service, "verify_api_token", new_callable=AsyncMock) as mock_verify,
+            patch.object(tmdb_service, "check_adult_access", new_callable=AsyncMock) as mock_adult,
         ):
             mock_verify.return_value = (True, None)
             mock_adult.return_value = (True, "已开启（关键词「hentai」命中成人内容）")
@@ -306,12 +297,8 @@ class TestAdultAccessCheck:
         await config_service.save_adult_status(True, "已开启")
 
         with (
-            patch.object(
-                tmdb_service, "verify_api_token", new_callable=AsyncMock
-            ) as mock_verify,
-            patch.object(
-                tmdb_service, "check_adult_access", new_callable=AsyncMock
-            ) as mock_adult,
+            patch.object(tmdb_service, "verify_api_token", new_callable=AsyncMock) as mock_verify,
+            patch.object(tmdb_service, "check_adult_access", new_callable=AsyncMock) as mock_adult,
         ):
             mock_verify.return_value = (False, "API Token 无效或已过期")
 
@@ -389,6 +376,42 @@ class TestTMDBServiceSearch:
             assert len(result.results) == 1
             assert result.results[0].id == 1396
             assert result.results[0].name == "Breaking Bad"
+
+    @pytest.mark.asyncio
+    async def test_search_series_uses_traditional_fallback_for_adult_result(self, tmdb_service):
+        """A simplified release title should retry with a TMDB-friendly title."""
+
+        async def fake_request(_endpoint, params):
+            response = MagicMock()
+            response.status_code = 200
+            if "牝教師" in params["query"]:
+                response.json.return_value = {
+                    "results": [
+                        {
+                            "id": 97038,
+                            "name": "牝教師4 ～穢された教壇～",
+                            "original_name": "牝教師4 ～穢された教壇～",
+                            "adult": True,
+                        }
+                    ],
+                    "total_results": 1,
+                }
+            else:
+                response.json.return_value = {"results": [], "total_results": 0}
+            return response
+
+        with patch.object(tmdb_service, "_make_api_request", new_callable=AsyncMock) as request:
+            request.side_effect = fake_request
+
+            result = await tmdb_service.search_series_by_api(
+                "牝教师4～秽された教坛～",
+                language="zh-CN",
+            )
+
+        assert result.query != "牝教师4～秽された教坛～"
+        assert result.results[0].id == 97038
+        assert result.results[0].adult is True
+        assert request.await_count <= 6
 
     @pytest.mark.asyncio
     async def test_search_series_by_api_timeout(self, tmdb_service):

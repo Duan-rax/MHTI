@@ -144,10 +144,12 @@ SUBTITLE_PATTERNS = [
 # 集数标记模式（用于定位副标题起始位置）
 # ============================================================================
 EPISODE_MARKERS_FOR_SUBTITLE = [
-    r"第\s*[\d一二三四五六七八九十]+\s*[話话集回章弾幕]",  # 第1話, 第二話
+    r"第\s*[\d一二三四五六七八九十]+\s*[話话集回章弾幕夜巻卷]",  # 第1話, 第二夜
     r"[＃#♯]\s*\d+",                                      # ＃2, #2
     r"[Vv]ol\.?\s*\d+",                                   # Vol.1
-    r"前編|後編|前篇|後篇|上巻|下巻",                      # 前編/後編
+    r"(?:[Pp]art|[Ss]oul|[Aa]ct|[Ee]pisode)\.?\s*\d+",    # part1, soul.3
+    r"\d+(?:st|nd|rd|th)",                                  # 1st, 2nd
+    r"前編|前编|後編|后編|后编|前篇|後篇|后篇|上巻|上卷|下巻|下卷|中編|中编",
     r"[其そ][のノ之乃]\s*[\d一二三四五六七八九十弍参肆伍]+",  # 其の弍, その1
 ]
 
@@ -158,7 +160,8 @@ ANIMATION_MARKERS = [
     r"\bOVA\b",
     r"\bOAD\b",
     r"\bONA\b",
-    r"\bTHE\s+ANIMATION\b",
+    r"THE[\s._-]*ANIMATION",
+    r"ANIME[\s._-]*EDITION",
     r"\bANIMATION\b",
 ]
 
@@ -170,7 +173,7 @@ def has_meaningful_text(text: str) -> bool:
     说明这个方括号本身是剧名，不能当作制作组删掉。
     """
     for pattern in EPISODE_MARKERS_FOR_SUBTITLE:
-        text = re.sub(pattern, "", text)
+        text = re.sub(pattern, "", text, flags=re.I)
     text = re.sub(r"[\[\]()（）【】「」『』\d\s._\-~～〜ー]+", "", text)
     return len(text) >= 2
 
@@ -219,6 +222,9 @@ class CleanerPlugin(ParserPlugin):
         # 2. 移除语言标识
         for pattern in LANGUAGE_SUFFIXES:
             cleaned = re.sub(pattern, "", cleaned, flags=re.I)
+
+        # Normalize full-width release brackets before group/author handling.
+        cleaned = cleaned.translate(str.maketrans({"［": "[", "］": "]", "【": "[", "】": "]"}))
 
         # 3. 移除日期前缀 [251114] / 251114] / 251114_ / [2019-05-06]
         cleaned = strip_date_prefix(cleaned).lstrip()
@@ -280,7 +286,7 @@ class CleanerPlugin(ParserPlugin):
         """
         # 找到集数标记的位置
         for pattern in EPISODE_MARKERS_FOR_SUBTITLE:
-            match = re.search(pattern, text)
+            match = re.search(pattern, text, flags=re.I)
             if match:
                 # 集数标记结束位置（位于未闭合方括号内时顺延到闭合符之后）
                 ep_end = self._extend_past_open_bracket(text, match)

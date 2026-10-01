@@ -10,6 +10,8 @@ from server.common.exceptions import (
     TMDBNotFoundError,
     TMDBTimeoutError,
 )
+from server.domain.metadata.search_queries import build_search_queries
+from server.domain.system.config_service import ConfigService
 from server.models.config import ApiTokenStatus
 from server.models.tmdb import (
     TMDBEpisode,
@@ -18,7 +20,6 @@ from server.models.tmdb import (
     TMDBSeason,
     TMDBSeries,
 )
-from server.domain.system.config_service import ConfigService
 
 TMDB_BASE_URL = "https://www.themoviedb.org"
 TMDB_API_BASE_URL = "https://api.themoviedb.org/3"
@@ -395,49 +396,70 @@ class TMDBService:
         if language is None:
             language = await self._get_language()
 
-        try:
-            response = await self._make_api_request(
-                "/search/tv",
-                params={"query": query, "language": language, "include_adult": "true"},
-            )
+        first_response: TMDBSearchResponse | None = None
+        first_nonempty: TMDBSearchResponse | None = None
 
-            if response.status_code != 200:
-                return TMDBSearchResponse(query=query, total_results=0, results=[])
+        # Keep the original query first.  Only fall back when it produces no
+        # adult result, so existing successful matching and result ordering stay
+        # unchanged.
+        for candidate in build_search_queries(query):
+            current = await self._search_series_once(candidate, language)
+            if first_response is None:
+                first_response = current
+            if current.results and first_nonempty is None:
+                first_nonempty = current
+            if any(item.adult for item in current.results):
+                return current
 
-            data = response.json()
-            results = []
-
-            for item in data.get("results", [])[:20]:
-                first_air_date = None
-                if item.get("first_air_date"):
-                    try:
-                        first_air_date = date.fromisoformat(item["first_air_date"])
-                    except ValueError:
-                        pass
-
-                results.append(
-                    TMDBSearchResult(
-                        id=item["id"],
-                        name=item.get("name", ""),
-                        original_name=item.get("original_name"),
-                        first_air_date=first_air_date,
-                        poster_path=item.get("poster_path"),
-                        overview=item.get("overview"),
-                        vote_average=item.get("vote_average"),
-                        adult=item.get("adult", False),
-                    )
-                )
-
-            return TMDBSearchResponse(
+        return (
+            first_nonempty
+            or first_response
+            or TMDBSearchResponse(
                 query=query,
-                total_results=data.get("total_results", len(results)),
-                results=results,
+                total_results=0,
+                results=[],
+            )
+        )
+
+    async def _search_series_once(self, query: str, language: str) -> TMDBSearchResponse:
+        """Run one TMDB TV search without query fallbacks."""
+        response = await self._make_api_request(
+            "/search/tv",
+            params={"query": query, "language": language, "include_adult": "true"},
+        )
+
+        if response.status_code != 200:
+            return TMDBSearchResponse(query=query, total_results=0, results=[])
+
+        data = response.json()
+        results = []
+
+        for item in data.get("results", [])[:20]:
+            first_air_date = None
+            if item.get("first_air_date"):
+                try:
+                    first_air_date = date.fromisoformat(item["first_air_date"])
+                except ValueError:
+                    pass
+
+            results.append(
+                TMDBSearchResult(
+                    id=item["id"],
+                    name=item.get("name", ""),
+                    original_name=item.get("original_name"),
+                    first_air_date=first_air_date,
+                    poster_path=item.get("poster_path"),
+                    overview=item.get("overview"),
+                    vote_average=item.get("vote_average"),
+                    adult=item.get("adult", False),
+                )
             )
 
-        except ValueError:
-            raise
-        except (httpx.TimeoutException, httpx.RequestError):
-            raise
+        return TMDBSearchResponse(
+            query=query,
+            total_results=data.get("total_results", len(results)),
+            results=results,
+        )
 
     async def get_series_by_api(
         self,
