@@ -7,7 +7,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from server.models.nfo import EpisodeNFO, SeasonNFO
-from server.models.tmdb import TMDBSearchResult, TMDBSeason, TMDBSeries
+from server.models.tmdb import TMDBEpisode, TMDBSearchResult, TMDBSeason, TMDBSeries
 
 if TYPE_CHECKING:
     from server.domain.artifacts.nfo_service import NFOService
@@ -35,6 +35,7 @@ class ScraperMetadataResolver:
         Returns:
             添加了详情信息的搜索结果列表。
         """
+
         async def fetch_details(result: TMDBSearchResult) -> TMDBSearchResult:
             try:
                 series = await self.tmdb_service.get_series_by_api(result.id)
@@ -87,6 +88,42 @@ class ScraperMetadataResolver:
                     best = r
 
         return best
+
+    @staticmethod
+    def select_unique_search_result_by_date(
+        results: list[TMDBSearchResult],
+        year: int | None,
+        month: int | None,
+    ) -> TMDBSearchResult | None:
+        """Select only when exactly one series matches the collection date."""
+        if year is None:
+            return None
+        matching = [
+            result
+            for result in results
+            if result.first_air_date
+            and result.first_air_date.year == year
+            and (month is None or result.first_air_date.month == month)
+        ]
+        return matching[0] if len(matching) == 1 else None
+
+    @staticmethod
+    def select_unique_episode_by_date(
+        episodes: list[TMDBEpisode] | None,
+        year: int | None,
+        month: int | None,
+    ) -> TMDBEpisode | None:
+        """Select only when one episode aired in the collection year/month."""
+        if not episodes or year is None:
+            return None
+        matching = [
+            episode
+            for episode in episodes
+            if episode.air_date
+            and episode.air_date.year == year
+            and (month is None or episode.air_date.month == month)
+        ]
+        return matching[0] if len(matching) == 1 else None
 
     def generate_episode_nfo(
         self,

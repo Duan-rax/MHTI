@@ -1,7 +1,8 @@
 """Filename parsing service using plugin architecture."""
 
-from server.models.parser import ParsedInfo
 from server.domain.parsing.parsers import DEFAULT_PLUGINS, ParseContext, ParserPlugin
+from server.domain.parsing.release_date import extract_collection_date
+from server.models.parser import ParsedInfo
 
 
 class ParserService:
@@ -48,6 +49,10 @@ class ParserService:
         if ctx.episode is not None and ctx.season is None:
             ctx.season = 1
 
+        collection_year, collection_month = extract_collection_date(filepath)
+        if ctx.year is None:
+            ctx.year = collection_year
+
         # 转换为 ParsedInfo
         return ParsedInfo(
             original_filename=filename,
@@ -55,13 +60,12 @@ class ParserService:
             season=ctx.season,
             episode=ctx.episode,
             year=ctx.year,
+            month=collection_month,
             is_parsed=ctx.episode is not None or ctx.series_name is not None,
             confidence=ctx.confidence,
         )
 
-    def parse_batch(
-        self, files: list[tuple[str, str | None]]
-    ) -> tuple[list[ParsedInfo], float]:
+    def parse_batch(self, files: list[tuple[str, str | None]]) -> tuple[list[ParsedInfo], float]:
         """
         Parse multiple filenames.
 

@@ -12,6 +12,7 @@ class ParsedInfo(BaseModel):
     episode: int | None = None
     episode_title: str | None = None
     year: int | None = None
+    month: int | None = None
     is_parsed: bool = False
     confidence: float = 0.0
 

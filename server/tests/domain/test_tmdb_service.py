@@ -411,7 +411,40 @@ class TestTMDBServiceSearch:
         assert result.query != "牝教师4～秽された教坛～"
         assert result.results[0].id == 97038
         assert result.results[0].adult is True
-        assert request.await_count <= 6
+        assert request.await_count <= 10
+
+    @pytest.mark.asyncio
+    async def test_search_series_rejects_unrelated_fallback_adult_result(self, tmdb_service):
+        """A broad fallback must not auto-select an unrelated adult title."""
+
+        async def fake_request(_endpoint, params):
+            response = MagicMock()
+            response.status_code = 200
+            if params["query"] == "ばくあね2":
+                response.json.return_value = {
+                    "results": [
+                        {
+                            "id": 123,
+                            "name": "Unrelated",
+                            "original_name": "まったく別の作品",
+                            "adult": True,
+                        }
+                    ],
+                    "total_results": 1,
+                }
+            else:
+                response.json.return_value = {"results": [], "total_results": 0}
+            return response
+
+        with patch.object(tmdb_service, "_make_api_request", new_callable=AsyncMock) as request:
+            request.side_effect = fake_request
+
+            result = await tmdb_service.search_series_by_api(
+                "ばくあね2弟いっぱいしぼっちゃうぞ！",
+                language="zh-CN",
+            )
+
+        assert result.results == []
 
     @pytest.mark.asyncio
     async def test_search_series_by_api_timeout(self, tmdb_service):

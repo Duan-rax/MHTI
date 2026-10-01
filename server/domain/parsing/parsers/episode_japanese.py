@@ -72,7 +72,7 @@ SPECIAL_PATTERNS = [
     # 日语特别篇
     r"特別編|特別篇|特别编|特别篇",
     r"番外編|番外篇|番外编|番外篇",
-    r"SP編|SP篇|SP",
+    r"(?<![A-Za-z])SP(?:編|篇)?(?![A-Za-z])",
     # OVA/OAD
     r"OVA|OAD|ONA",
     # 剧场版/总集篇

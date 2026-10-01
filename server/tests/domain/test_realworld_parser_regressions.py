@@ -34,6 +34,12 @@ def parser_service() -> ParserService:
             1,
         ),
         ("[字幕组][720P][GOLDBEAR]龙堂寺士门の淫谋 前编.mp4", "龙堂寺士门の淫谋", 1),
+        (
+            "[字幕组][720P][CollaborationWorkspetit]"
+            "ヌキどきッ！Revolution～天使と悪魔の搾精バトル～夕焼け空.mp4",
+            "ヌキどきッ！Revolution～天使と悪魔の搾精バトル～夕焼け空",
+            None,
+        ),
     ],
 )
 def test_realworld_release_names(parser_service, filename, expected_name, expected_episode):

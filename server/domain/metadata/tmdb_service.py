@@ -10,7 +10,7 @@ from server.common.exceptions import (
     TMDBNotFoundError,
     TMDBTimeoutError,
 )
-from server.domain.metadata.search_queries import build_search_queries
+from server.domain.metadata.search_queries import build_search_queries, normalize_title_key
 from server.domain.system.config_service import ConfigService
 from server.models.config import ApiTokenStatus
 from server.models.tmdb import (
@@ -406,10 +406,21 @@ class TMDBService:
             current = await self._search_series_once(candidate, language)
             if first_response is None:
                 first_response = current
-            if current.results and first_nonempty is None:
-                first_nonempty = current
-            if any(item.adult for item in current.results):
+            adult_results = [item for item in current.results if item.adult]
+            if candidate == query and adult_results:
                 return current
+            if adult_results:
+                matched_adult = [
+                    item for item in adult_results if self._result_matches_fallback(item, candidate)
+                ]
+                if matched_adult:
+                    return TMDBSearchResponse(
+                        query=candidate,
+                        total_results=len(matched_adult),
+                        results=matched_adult,
+                    )
+            elif current.results and first_nonempty is None:
+                first_nonempty = current
 
         return (
             first_nonempty
@@ -420,6 +431,20 @@ class TMDBService:
                 results=[],
             )
         )
+
+    @staticmethod
+    def _result_matches_fallback(result: TMDBSearchResult, candidate: str) -> bool:
+        """Reject unrelated adult hits produced by shortened fallback queries."""
+        candidate_key = normalize_title_key(candidate)
+        if len(candidate_key) < 3:
+            return False
+        for title in (result.original_name, result.name):
+            if not title:
+                continue
+            title_key = normalize_title_key(title)
+            if candidate_key in title_key or title_key in candidate_key:
+                return True
+        return False
 
     async def _search_series_once(self, query: str, language: str) -> TMDBSearchResponse:
         """Run one TMDB TV search without query fallbacks."""
